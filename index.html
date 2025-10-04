@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receipt Upload & OCR</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 800px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+
+    .content {
+      padding: 30px;
+    }
+
+    .upload-section {
+      text-align: center;
+      padding: 40px 20px;
+      border: 3px dashed #667eea;
+      border-radius: 12px;
+      background: #f8f9ff;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 30px;
+    }
+
+    .upload-section:hover {
+      border-color: #764ba2;
+      background: #f0f2ff;
+    }
+
+    .upload-section.dragover {
+      border-color: #764ba2;
+      background: #e8ebff;
+      transform: scale(1.02);
+    }
+
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+      color: #667eea;
+    }
+
+    .upload-section h3 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+
+    .upload-section p {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    #receiptInput {
+      display: none;
+    }
+
+    .btn {
+      padding: 12px 30px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #e0e7ff;
+      color: #667eea;
+    }
+
+    .btn-secondary:hover {
+      background: #c7d2fe;
+    }
+
+    .btn-success {
+      background: #10b981;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #059669;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #status {
+      text-align: center;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 8px;
+      font-weight: 500;
+      display: none;
+    }
+
+    #status.loading {
+      background: #fef3c7;
+      color: #92400e;
+      display: block;
+    }
+
+    #status.success {
+      background: #d1fae5;
+      color: #065f46;
+      display: block;
+    }
+
+    #status.error {
+      background: #fee2e2;
+      color: #991b1b;
+      display: block;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    #result {
+      display: none;
+      animation: slideIn 0.5s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .result-header h3 {
+      color: #333;
+      font-size: 22px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      color: #4b5563;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: inherit;
+      transition: all 0.3s ease;
+      background: #f9fafb;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group input:read-only,
+    .form-group textarea:read-only {
+      background: #f3f4f6;
+      cursor: default;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 15px;
+      margin-top: 30px;
+      justify-content: center;
+    }
+
+    .preview-image {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .preview-image img {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .info-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #dbeafe;
+      color: #1e40af;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        margin: 10px;
+      }
+
+      .content {
+        padding: 20px;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📄 Receipt Scanner</h1>
+      <p>Upload your receipt and let AI extract the details</p>
+    </div>
+
+    <div class="content">
+      <div class="upload-section" id="uploadSection" onclick="document.getElementById('receiptInput').click()">
+        <div class="upload-icon">📸</div>
+        <h3>Click or Drag Receipt Here</h3>
+        <p>Supports JPG, PNG, PDF images</p>
+        <input type="file" id="receiptInput" accept="image/*" onchange="handleFileSelect(event)">
+      </div>
+
+      <div id="status"></div>
+
+      <div id="result">
+        <div class="result-header">
+          <h3>Extracted Information</h3>
+          <span class="info-badge" id="editModeTag">Read Only</span>
+        </div>
+
+        <div class="preview-image" id="previewContainer" style="display: none;">
+          <img id="previewImage" src="" alt="Receipt Preview">
+        </div>
+
+        <form id="receiptForm">
+          <div class="form-group">
+            <label for="merchant">🏪 Merchant Name</label>
+            <input type="text" id="merchant" readonly required>
+          </div>
+
+          <div class="form-group">
+            <label for="amount">💰 Amount</label>
+            <input type="text" id="amount" readonly required placeholder="0.00">
+          </div>
+
+          <div class="form-group">
+            <label for="date">📅 Date</label>
+            <input type="date" id="date" readonly required>
+          </div>
+
+          <div class="form-group">
+            <label for="description">📝 Description</label>
+            <textarea id="description" readonly></textarea>
+          </div>
+
+          <div class="button-group">
+            <button type="button" class="btn btn-secondary" id="editBtn" onclick="enableEdit()">
+              ✏️ Edit Details
+            </button>
+            <button type="button" class="btn btn-success" id="submitBtn" onclick="submitReceipt()" style="display: none;">
+              ✓ Save to Database
+            </button>
+            <button type="button" class="btn btn-secondary" id="cancelBtn" onclick="cancelEdit()" style="display: none;">
+              ✕ Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentData = {};
+    let isEditMode = false;
+
+    // Drag and drop functionality
+    const uploadSection = document.getElementById('uploadSection');
+
+    uploadSection.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadSection.classList.add('dragover');
+    });
+
+    uploadSection.addEventListener('dragleave', () => {
+      uploadSection.classList.remove('dragover');
+    });
+
+    uploadSection.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadSection.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        document.getElementById('receiptInput').files = files;
+        handleFileSelect({ target: { files } });
+      }
+    });
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        uploadReceipt(file);
+      }
+    }
+
+    function updateStatus(message, type = 'loading') {
+      const statusDiv = document.getElementById('status');
+      statusDiv.className = type;
+      
+      if (type === 'loading') {
+        statusDiv.innerHTML = `<span class="spinner"></span> ${message}`;
+      } else {
+        statusDiv.textContent = message;
+      }
+    }
+
+    function showPreview(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        document.getElementById('previewImage').src = e.target.result;
+        document.getElementById('previewContainer').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function uploadReceipt(file) {
+      if (!file) {
+        updateStatus('Please select a file!', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('receipt', file);
+
+      const resultDiv = document.getElementById('result');
+      resultDiv.style.display = 'none';
+      updateStatus('Processing receipt... This may take a few seconds', 'loading');
+      showPreview(file);
+
+      try {
+        const response = await fetch('http://localhost:5000/api/process-receipt', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const data = await response.json();
+
+        if (data.success) {
+          currentData = data.data;
+          document.getElementById('merchant').value = currentData.merchant;
+          document.getElementById('amount').value = currentData.amount;
+          document.getElementById('date').value = currentData.date;
+          document.getElementById('description').value = currentData.description;
+          
+          resultDiv.style.display = 'block';
+          updateStatus('✓ Receipt processed successfully! Review the details below.', 'success');
+          
+          // Reset edit mode
+          disableEdit();
+        } else {
+          updateStatus(`✗ Error: ${data.error}`, 'error');
+        }
+      } catch (error) {
+        console.error('Upload Error:', error);
+        updateStatus('✗ Failed to process receipt. Please try again.', 'error');
+      }
+    }
+
+    function enableEdit() {
+      isEditMode = true;
+      document.getElementById('merchant').removeAttribute('readonly');
+      document.getElementById('amount').removeAttribute('readonly');
+      document.getElementById('date').removeAttribute('readonly');
+      document.getElementById('description').removeAttribute('readonly');
+      
+      document.getElementById('editBtn').style.display = 'none';
+      document.getElementById('submitBtn').style.display = 'inline-flex';
+      document.getElementById('cancelBtn').style.display = 'inline-flex';
+      document.getElementById('editModeTag').textContent = 'Editing Mode';
+      document.getElementById('editModeTag').style.background = '#fef3c7';
+      document.getElementById('editModeTag').style.color = '#92400e';
+      
+      updateStatus('✏️ Edit mode enabled. Modify the fields and click Save.', 'success');
+    }
+
+    function disableEdit() {
+      isEditMode = false;
+      document.getElementById('merchant').setAttribute('readonly', true);
+      document.getElementById('amount').setAttribute('readonly', true);
+      document.getElementById('date').setAttribute('readonly', true);
+      document.getElementById('description').setAttribute('readonly', true);
+      
+      document.getElementById('editBtn').style.display = 'inline-flex';
+      document.getElementById('submitBtn').style.display = 'none';
+      document.getElementById('cancelBtn').style.display = 'none';
+      document.getElementById('editModeTag').textContent = 'Read Only';
+      document.getElementById('editModeTag').style.background = '#dbeafe';
+      document.getElementById('editModeTag').style.color = '#1e40af';
+    }
+
+    function cancelEdit() {
+      // Restore original values
+      document.getElementById('merchant').value = currentData.merchant;
+      document.getElementById('amount').value = currentData.amount;
+      document.getElementById('date').value = currentData.date;
+      document.getElementById('description').value = currentData.description;
+      
+      disableEdit();
+      updateStatus('✓ Changes cancelled. Original values restored.', 'success');
+    }
+
+    async function submitReceipt() {
+      const editedData = {
+        merchant: document.getElementById('merchant').value,
+        amount: document.getElementById('amount').value,
+        date: document.getElementById('date').value,
+        description: document.getElementById('description').value,
+        receiptUrl: currentData.receiptUrl,
+      };
+
+      // Validation
+      if (!editedData.merchant || !editedData.amount || !editedData.date) {
+        updateStatus('✗ Please fill in all required fields!', 'error');
+        return;
+      }
+
+      updateStatus('Saving to database...', 'loading');
+      document.getElementById('submitBtn').disabled = true;
+
+      try {
+        const response = await fetch('http://localhost:5000/api/submit-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editedData),
+        });
+        
+        const data = await response.json();
+
+        if (data.success) {
+          updateStatus(`✓ Receipt saved successfully! ID: ${data.expenseId}`, 'success');
+          disableEdit();
+          
+          // Update current data with edited values
+          currentData = editedData;
+        } else {
+          updateStatus(`✗ Error: ${data.error}`, 'error');
+          document.getElementById('submitBtn').disabled = false;
+        }
+      } catch (error) {
+        console.error('Submit Error:', error);
+        updateStatus('✗ Failed to save receipt. Please try again.', 'error');
+        document.getElementById('submitBtn').disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
