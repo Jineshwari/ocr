@@ -28,7 +28,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// Enhanced date parsing with period handling
+// Enhanced date parsing
 function parseDate(text) {
   const cleanText = text
     .replace(/daze|dace|dale/gi, 'date')
@@ -60,7 +60,7 @@ function parseDate(text) {
           date = new Date(match[0]);
         }
         if (date && !isNaN(date.getTime())) {
-          return date.toISOString().split('T')[0];
+          return date.toISOString().split('T')[0]; // YYYY-MM-DD format
         }
       } catch (e) {
         continue;
@@ -70,37 +70,40 @@ function parseDate(text) {
   return new Date().toISOString().split('T')[0];
 }
 
-// Enhanced amount extraction
-function extractAmount(text) {
+// Enhanced amount and currency extraction
+function extractAmountAndCurrency(text) {
   const lines = text.split('\n').map(l => l.trim());
-  const amounts = [];
+  let amount = '0.00';
+  let currency = 'USD';
 
   const totalKeywords = [
-    /total[:\s]*(?:USD|usd|\$)?\s*(\d+[,.]?\d*\.?\d{0,2})/i,
-    /amount[:\s]*(?:USD|usd|\$)?\s*(\d+[,.]?\d*\.?\d{0,2})/i,
-    /balance[:\s]*(?:USD|usd|\$)?\s*(\d+[,.]?\d*\.?\d{0,2})/i,
-    /grand\s+total[:\s]*(?:USD|usd|\$)?\s*(\d+[,.]?\d*\.?\d{0,2})/i,
-    /sum[:\s]*(?:USD|usd|\$)?\s*(\d+[,.]?\d*\.?\d{0,2})/i,
+    /total[:\s]*(?:(\w{3}))?\s*(\d+[,.]?\d*\.?\d{0,2})/i,
+    /amount[:\s]*(?:(\w{3}))?\s*(\d+[,.]?\d*\.?\d{0,2})/i,
+    /balance[:\s]*(?:(\w{3}))?\s*(\d+[,.]?\d*\.?\d{0,2})/i,
+    /grand\s+total[:\s]*(?:(\w{3}))?\s*(\d+[,.]?\d*\.?\d{0,2})/i,
   ];
 
   for (const keyword of totalKeywords) {
     const match = text.match(keyword);
     if (match) {
-      let amount = match[1].replace(/,/g, '');
-      if (!amount.includes('.')) amount += '.00';
-      amounts.push(parseFloat(amount));
+      currency = match[1] ? match[1].toUpperCase() : currency; // Extract currency if present
+      let amt = match[2].replace(/,/g, '');
+      if (!amt.includes('.')) amt += '.00';
+      amount = parseFloat(amt).toFixed(2);
+      break;
     }
   }
 
-  const currencyPattern = /(?:USD|usd|\$)\s*(\d+[,.]?\d*\.?\d{0,2})/gi;
+  const currencyPattern = /(?:(\w{3}))\s*(\d+[,.]?\d*\.?\d{0,2})/gi;
   let match;
   while ((match = currencyPattern.exec(text)) !== null) {
-    let amount = match[1].replace(/,/g, '');
-    if (!amount.includes('.')) amount += '.00';
-    amounts.push(parseFloat(amount));
+    currency = match[1].toUpperCase();
+    let amt = match[2].replace(/,/g, '');
+    if (!amt.includes('.')) amt += '.00';
+    amount = parseFloat(amt).toFixed(2);
   }
 
-  return amounts.length > 0 ? Math.max(...amounts).toFixed(2) : '0.00';
+  return { amount, currency };
 }
 
 // Enhanced merchant extraction
@@ -110,8 +113,8 @@ function extractMerchant(text) {
     for (let line of lines) {
       line = line.replace(/[^\w\s\.\-&]/g, '').trim();
       if (line.length >= 3 && !/^\d+$/.test(line) && !/date|total|tax/i.test(line.toLowerCase())) {
-        if (/enterprises/i.test(line)) return line; // Prioritize lines with "Enterprises"
-        if (line !== 'PAYMENT RECEIPT') return line; // Avoid header
+        if (/enterprises/i.test(line)) return line;
+        if (line !== 'PAYMENT RECEIPT') return line;
       }
     }
   }
@@ -121,7 +124,7 @@ function extractMerchant(text) {
 // Enhanced description extraction
 function extractDescription(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  const descriptions = new Set(); // Use Set to avoid duplicates
+  const descriptions = new Set();
 
   const itemPatterns = [
     /([a-zA-Z\s]{3,})\s+\d+\s+(?:USD|usd|\$)/i,
@@ -190,11 +193,13 @@ app.post('/api/process-receipt', upload.single('receipt'), async (req, res) => {
     console.log(text);
     console.log('==================================');
 
+    const { amount, currency } = extractAmountAndCurrency(text);
     const parsedData = {
-      amount: extractAmount(text),
+      amount: amount,
       date: parseDate(text),
       description: extractDescription(text),
       merchant: extractMerchant(text),
+      currency: currency, // Added currency field
       receiptUrl: `/uploads/${req.file.filename}`,
     };
 
@@ -218,7 +223,7 @@ app.post('/api/process-receipt', upload.single('receipt'), async (req, res) => {
 
 app.post('/api/submit-receipt', async (req, res) => {
   try {
-    const { amount, date, description, merchant, receiptUrl } = req.body;
+    const { amount, date, description, merchant, receiptUrl, currency } = req.body;
     if (!amount || !date || !merchant) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
@@ -227,7 +232,7 @@ app.post('/api/submit-receipt', async (req, res) => {
     await knex('expenses').insert({
       id: expenseId,
       amount: parseFloat(amount),
-      currency: 'USD',
+      currency: currency || 'USD',
       date: date,
       description: description || 'No description',
       merchant: merchant,
